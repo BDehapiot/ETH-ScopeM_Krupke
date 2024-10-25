@@ -377,7 +377,7 @@ class CustomCallback(Callback):
 if __name__ == "__main__":
 
     # Paths
-    train_path = Path(Path.cwd().parent, "data", "train_calcium")
+    train_path = Path(Path.cwd(), "train")
 
     # Train
     train = Train(
@@ -386,7 +386,7 @@ if __name__ == "__main__":
         msk_suffix="",
         msk_type="normal",
         img_norm="global",
-        patch_size=128,
+        patch_size=256,
         patch_overlap=32,
         nAugment=500,
         backbone="resnet18",

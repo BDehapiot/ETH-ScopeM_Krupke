@@ -15,7 +15,7 @@ from skimage.transform import downscale_local_mean
 #%% Inputs --------------------------------------------------------------------
 
 data_path = Path("D:\local_Krupke\data")
-train_path = Path(Path.cwd(), "data", "train")
+train_path = Path(Path.cwd(), "bdmodel", "train")
 df = 30
 
 #%% Function(s) ---------------------------------------------------------------
@@ -36,10 +36,9 @@ def extract(path, df):
         # img = norm_pct(norm_gcn(img), pct_low=0.01, pct_high=99.99)
         
         # Save
-        io.imsave(
-            str(path).replace(".lif", f"_pix({pixSize * df:.3f})_{i:02d}.tif"),
-            img.astype("float32"), check_contrast=False,
-            )
+        save_path = Path(
+            train_path, path.stem + f"_pix({pixSize * df:.3f})_{i:02d}.tif")
+        io.imsave(save_path, img.astype("float32"), check_contrast=False)
         
         del img
         gc.collect()
