@@ -34,7 +34,7 @@ Todo
 #%% Inputs --------------------------------------------------------------------
 
 # Paths
-train_path = Path(Path.cwd(), "train")
+train_path = Path(Path.cwd().parent, "data", "train")
 
 # Parameters
 edit = True
