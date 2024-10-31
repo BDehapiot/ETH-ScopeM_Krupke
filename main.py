@@ -11,8 +11,12 @@ import matplotlib.pyplot as plt
 from extract import extract
 from bdmodel.functions import predict
 
+# bdtools
+from bdtools.norm import norm_gcn, norm_pct
+
 # Skimage
 from skimage.filters import gaussian
+from skimage.exposure import adjust_gamma
 from skimage.morphology import (
     remove_small_holes, remove_small_objects, 
     binary_erosion, binary_dilation, disk
@@ -76,53 +80,60 @@ if __name__ == "__main__":
     # Analyse
     bins, values = analyse(img, edm)
     bins *= pixSize
+    dataframe = pd.DataFrame({
+        'Dist. (µm)': bins[:-1],
+        'Fluo. Int. (A.U.)': values,
+        })
     
     # Plot
     plt.hist(bins[:-1], bins=bins, weights=values, edgecolor='black')
     plt.xlabel("Distance from the surface (µm)")
     plt.ylabel("Fluorescence intensity (A.U.)")
     
-    # /////////////////////////////////////////////////////////////////////////
+    # Display
+    display = np.zeros((img.shape[0], img.shape[1], 3))
+    img_display = adjust_gamma(norm_pct(norm_gcn(img)), gamma=0.9)
+    out_display = binary_dilation(outlines * 1)
+    display[..., 0] = img_display
+    display[..., 1] = np.maximum(img_display, out_display)
+    display[..., 2] = img_display
     
-    # Save display
-    display = []
-    display.append(img.astype("float32"))
-    display.append((msk * 65535).astype("float32"))
-    display.append((outlines * 65535).astype("float32"))
-    display.append(edm.astype("float32"))
-    display.append(edm.astype("float32"))
-    display = np.stack(display)
+    # Save
+    save_path = img_path.parent / img_path.stem
+    save_path.mkdir(exist_ok=True)
+    
+    dataframe.to_csv(save_path / "results.csv", index=False)
+    
+    plt.savefig(save_path / "results.png")
+    plt.close()
     
     io.imsave(
-        str(img_path).replace(".lif", "_display.tif"),
-        display,
+        save_path / "img.tif", 
+        img.astype("uint16"), 
         check_contrast=False,
-        imagej=True,
-        metadata={
-            'axes': 'CYX', 
-            'mode': 'composite',
-            }
+        )
+    io.imsave(
+        save_path / "mask.tif", 
+        (msk * 255).astype("uint8"), 
+        check_contrast=False,
+        )
+    io.imsave(
+        save_path / "outlines.tif", 
+        (outlines * 255).astype("uint8"), 
+        check_contrast=False,
+        )
+    io.imsave(
+        save_path / "edm.tif", 
+        edm.astype("float32"), 
+        check_contrast=False,
+        )
+    io.imsave(
+        save_path / "display.tif", 
+        display.astype("float32"), 
+        check_contrast=False,
         )
         
-    # /////////////////////////////////////////////////////////////////////////
-    
-    # Save dataframe
-    dataframe = pd.DataFrame({
-        'Dist. (µm)': bins[:-1],
-        'Fluo. Int. (A.U.)': values,
-        })
-    dataframe.to_csv(
-        str(img_path).replace(".lif", "_results.csv"), 
-        index=False
-        )
-    
-    
-    # # Display
+    # Display
     # viewer = napari.Viewer()
-    # viewer.add_image(img, gamma=0.5)
-    # viewer.add_image(prds_mass)
-    # viewer.add_image(prds_surface)
-    # # viewer.add_image(msk)
-    # viewer.add_image(outlines, blending="additive")
-    # viewer.add_image(edm)
+    # viewer.add_image(display)
     
