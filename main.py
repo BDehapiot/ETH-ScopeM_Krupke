@@ -27,19 +27,16 @@ from scipy.ndimage import distance_transform_edt
 #%% Inputs --------------------------------------------------------------------
 
 # Paths
-data_path = Path("D:\local_Krupke\data")
+img_name = "240611-12_2 merged.lif" # image name
+data_path = Path.cwd() / "data" # image folder path
 model_mass_path = Path.cwd() / "bdmodel" / "model_mass_768"
 model_surface_path = Path.cwd() / "bdmodel" / "model_surface_768"
-img_name = "240611-12_2 merged.lif"
-# img_name = "240611-13_4 merged.lif"
-# img_name = "240611-16_4 merged.lif"
-# img_name = "240611-18_4 merged.lif"
 img_path = data_path / img_name
 
 # Parameters
-df = 30
-max_bin = 50
-num_bins = 50
+df = 30 # downscale factor (should be kept at 30)
+max_bin = 1000 # max bin distance in µm
+num_bins = 100 # number of bins between 0 and max bin
 
 #%% Function(s) ---------------------------------------------------------------
 
@@ -54,9 +51,10 @@ def process(prds_mass, prds_surface):
     edm[msk_mass == 0] = 0
     return msk_mass, outlines, edm
 
-def analyse(img, edm):
+def analyse(img, edm, pixSize, df):
     y, x = img.ravel(), edm.ravel()
-    bins = np.linspace(0, max_bin, num_bins + 1)
+    max_bin_pix = max_bin / (pixSize * df)
+    bins = np.linspace(0, max_bin_pix, num_bins + 1)
     indices = np.digitize(x, bins)
     binned_y = [y[indices == i] for i in range(1, len(bins))]
     values = [arr.mean() if len(arr) > 0 else 0 for arr in binned_y]
@@ -77,7 +75,7 @@ if __name__ == "__main__":
     msk, outlines, edm = process(prds_mass, prds_surface)
     
     # Analyse
-    bins, values = analyse(img, edm)
+    bins, values = analyse(img, edm, pixSize, df)
     bins *= pixSize * df
     dataframe = pd.DataFrame({
         'Dist. (µm)': bins[:-1],
@@ -90,9 +88,11 @@ if __name__ == "__main__":
     plt.ylabel("Fluorescence intensity (A.U.)")
     
     # Display
-    display = np.zeros((img.shape[0], img.shape[1], 3))
-    img_display = adjust_gamma(norm_pct(norm_gcn(img)), gamma=0.9)
+    display = np.zeros((img.shape[0], img.shape[1], 3)).astype("uint8")
+    img_display = adjust_gamma(norm_pct(norm_gcn(img)), gamma=0.5)
     out_display = binary_dilation(outlines * 1)
+    img_display = (img_display * 255).astype("uint8")
+    out_display = (out_display * 255).astype("uint8")
     display[..., 0] = img_display
     display[..., 1] = np.maximum(img_display, out_display)
     display[..., 2] = img_display
@@ -128,7 +128,7 @@ if __name__ == "__main__":
         )
     io.imsave(
         save_path / "display.tif", 
-        display.astype("float32"), 
+        display, 
         check_contrast=False,
         )
         
