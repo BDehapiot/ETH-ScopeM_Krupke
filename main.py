@@ -30,10 +30,10 @@ from scipy.ndimage import distance_transform_edt
 data_path = Path("D:\local_Krupke\data")
 model_mass_path = Path.cwd() / "bdmodel" / "model_mass_768"
 model_surface_path = Path.cwd() / "bdmodel" / "model_surface_768"
-# img_name = "240611-12_2 merged.lif"
+img_name = "240611-12_2 merged.lif"
 # img_name = "240611-13_4 merged.lif"
 # img_name = "240611-16_4 merged.lif"
-img_name = "240611-18_4 merged.lif"
+# img_name = "240611-18_4 merged.lif"
 img_path = data_path / img_name
 
 # Parameters
@@ -78,7 +78,7 @@ if __name__ == "__main__":
     
     # Analyse
     bins, values = analyse(img, edm)
-    bins *= pixSize
+    bins *= pixSize * df
     dataframe = pd.DataFrame({
         'Dist. (µm)': bins[:-1],
         'Fluo. Int. (A.U.)': values,
