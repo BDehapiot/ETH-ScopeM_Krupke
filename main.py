@@ -15,7 +15,6 @@ from bdmodel.functions import predict
 from bdtools.norm import norm_gcn, norm_pct
 
 # Skimage
-from skimage.filters import gaussian
 from skimage.exposure import adjust_gamma
 from skimage.morphology import (
     remove_small_holes, remove_small_objects, 
@@ -134,6 +133,6 @@ if __name__ == "__main__":
         )
         
     # Display
-    # viewer = napari.Viewer()
-    # viewer.add_image(display)
+    viewer = napari.Viewer()
+    viewer.add_image(display)
     
