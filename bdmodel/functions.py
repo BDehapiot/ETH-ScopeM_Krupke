@@ -1,87 +1,82 @@
 #%% Imports -------------------------------------------------------------------
 
 import os
-import pickle
 import warnings
 import numpy as np
-from skimage import io
-from pathlib import Path
-from matplotlib import cm
 os.environ['NO_ALBUMENTATIONS_UPDATE'] = "1" # Don't know if it works
 import albumentations as A
-import matplotlib.pyplot as plt
-import segmentation_models as sm
 from joblib import Parallel, delayed 
 
 # bdtools
 from bdtools.mask import get_edt
 from bdtools.norm import norm_gcn, norm_pct
-from bdtools.patch import extract_patches, merge_patches
+from bdtools.patch import extract_patches
 
 # Skimage
 from skimage.segmentation import find_boundaries 
 
-#%% Functions: ----------------------------------------------------------------
+#%% Function: get_paths() -----------------------------------------------------
 
-def open_data(train_path, msk_suffix):
-    imgs, msks = [], []
-    tag = f"_mask{msk_suffix}"
-    for path in train_path.iterdir():
-        if tag in path.stem:
-            img_name = path.name.replace(tag, "")
-            imgs.append(io.imread(path.parent / img_name))
-            msks.append(io.imread(path))
-    return imgs, msks
-
-def split_idx(n, validation_split=0.2):
-    val_n = int(n * validation_split)
-    trn_n = n - val_n
-    idx = np.arange(n)
-    np.random.shuffle(idx)
-    trn_idx = idx[:trn_n]
-    val_idx = idx[trn_n:]
-    return trn_idx, val_idx
-
-def save_val_prds(imgs, msks, prds, save_path):
-
-    plt.ioff() # turn off inline plot
+def get_paths(
+        rootpath, 
+        ext=".tif", 
+        tags_in=[], 
+        tags_out=[], 
+        subfolders=False, 
+        ):
     
-    for i in range(imgs.shape[0]):
-
-        # Initialize
-        fig, (ax0, ax1, ax2) = plt.subplots(
-            nrows=1, ncols=3, figsize=(15, 5))
-        cmap0, cmap1, cmap2 = cm.gray, cm.plasma, cm.plasma
-        shrink = 0.75
-
-        # Plot img
-        ax0.imshow(imgs[i], cmap=cmap0)
-        ax0.set_title("image")
-        ax0.set_xlabel("pixels")
-        ax0.set_ylabel("pixels")
-        fig.colorbar(
-            cm.ScalarMappable(cmap=cmap0), ax=ax0, shrink=shrink)
-
-        # Plot msk
-        ax1.imshow(msks[i], cmap=cmap1)
-        ax1.set_title("mask")
-        ax1.set_xlabel("pixels")
-        fig.colorbar(
-            cm.ScalarMappable(cmap=cmap1), ax=ax1, shrink=shrink)
+    """     
+    Retrieve file paths with specific extensions and tag criteria from a 
+    directory. The search can include subfolders if specified.
+    
+    Parameters
+    ----------
+    rootpath : str or pathlib.Path
+        Path to the target directory where files are located.
         
-        # Plot prd
-        ax2.imshow(prds[i], cmap=cmap2)
-        ax2.set_title("prediction")
-        ax2.set_xlabel("pixels")
-        fig.colorbar(
-            cm.ScalarMappable(cmap=cmap2), ax=ax2, shrink=shrink)
+    ext : str, default=".tif"
+        File extension to filter files by (e.g., ".tif" or ".jpg").
         
-        plt.tight_layout()
+    tags_in : list of str, optional
+        List of tags (substrings) that must be present in the file path
+        for it to be included.
         
-        # Save
-        Path(save_path, "val_prds").mkdir(exist_ok=True)
-        plt.savefig(save_path / "val_prds" / f"expl_{i:02d}.png")
-        plt.close(fig)
+    tags_out : list of str, optional
+        List of tags (substrings) that must not be present in the file path
+        for it to be included.
+        
+    subfolders : bool, default=False
+        If True, search will include all subdirectories within `rootpath`. 
+        If False, search will be limited to the specified `rootpath` 
+        directory only.
+        
+    Returns
+    -------  
+    selected_paths : list of pathlib.Path
+        A list of file paths that match the specified extension and 
+        tag criteria.
+        
+    """
+    
+    if subfolders:
+        paths = list(rootpath.rglob(f"*{ext}"))
+    else:
+        paths = list(rootpath.glob(f"*{ext}"))
+        
+    selected_paths = []
+    for path in paths:
+        if tags_in:
+            check_tags_in = all(tag in str(path) for tag in tags_in)
+        else:
+            check_tags_in = True
+        if tags_out:
+            check_tags_out = not any(tag in str(path) for tag in tags_out)
+        else:
+            check_tags_out = True
+        if check_tags_in and check_tags_out:
+            selected_paths.append(path)
+
+    return selected_paths
 
 #%% Function: preprocess() ----------------------------------------------------
    
@@ -102,10 +97,10 @@ def preprocess(
     Parameters
     ----------
     imgs : 2D ndarray or list of 2D ndarrays (int or float)
-        Inputs image(s).
+        Input image(s).
         
     msks : 2D ndarray or list of 2D ndarrays (bool or int), optional, default=None 
-        Inputs mask(s).
+        Input corresponding mask(s).
         If None, only images will be preprocessed.
         
     img_norm : str, default="global"
@@ -163,8 +158,10 @@ def preprocess(
 
     # Nested function(s) ------------------------------------------------------
 
-    def normalize(arr, pct_low=0.01, pct_high=99.99):
-        return norm_pct(norm_gcn(arr), pct_low=pct_low, pct_high=pct_high)      
+    def normalize(arr, sample_fraction=0.1):
+        arr = norm_gcn(arr, sample_fraction=sample_fraction)
+        arr = norm_pct(arr, sample_fraction=sample_fraction)
+        return arr      
             
     def _preprocess(img, msk=None):
 
@@ -200,12 +197,13 @@ def preprocess(
         imgs = normalize(imgs)
     if img_norm == "image":
         imgs = [normalize(img) for img in imgs]
-   
+    
     # Preprocess
     if msks is None:
         
-        if isinstance(imgs, np.ndarray):
-            imgs = [imgs]
+        if isinstance(imgs, np.ndarray):           
+            if imgs.ndim == 2: imgs = [imgs]
+            elif imgs.ndim == 3: imgs = list(imgs)
         
         if len(imgs) > 1:
                
@@ -213,7 +211,7 @@ def preprocess(
                 delayed(_preprocess)(img)
                 for img in imgs
                 )
-            imgs = [data[0] for data in outputs]
+            imgs = [data for data in outputs]
             imgs = np.stack([arr for sublist in imgs for arr in sublist])
                 
         else:
@@ -228,9 +226,11 @@ def preprocess(
     else:
         
         if isinstance(imgs, np.ndarray):
-            imgs = [imgs]
-        if isinstance(imgs, np.ndarray):
-            imgs = [imgs]
+            if imgs.ndim == 2: imgs = [imgs]
+            elif imgs.ndim == 3: imgs = list(imgs)
+        if isinstance(msks, np.ndarray):
+            if msks.ndim == 2: msks = [msks]
+            elif msks.ndim == 3: msks = list(msks)
         
         if len(imgs) > 1:
             
@@ -257,7 +257,44 @@ def preprocess(
 #%% Function: augment() -------------------------------------------------------
 
 def augment(imgs, msks, iterations):
+      
+    """
+    Augment images and masks using random transformations.
+    
+    The following transformation are applied:
         
+        - vertical flip (p = 0.5)      
+        - horizontal flip (p = 0.5)
+        - rotate 90° (p = 0.5)
+        - transpose (p = 0.5)
+        - distord (p = 0.5)
+    
+    The same transformation is applied to an image and its correponding mask.
+    Transformation can be tuned by modifying the `operations` variable.
+    The function is based on the `albumentations` library.
+    https://albumentations.ai/
+
+    Parameters
+    ----------
+    imgs : 3D ndarray (float)
+        Input image(s).
+        
+    msks : 3D ndarray (float) 
+        Input corresponding mask(s).
+        
+    iterations : int
+        The number of augmented samples to generate.
+    
+    Returns
+    -------
+    imgs : 3D ndarray (float)
+        Augmented image(s).
+        
+    msks : 3D ndarray (float) 
+        Augmented corresponding mask(s).
+    
+    """
+    
     if iterations <= imgs.shape[0]:
         warnings.warn(f"iterations ({iterations}) is less than n of images")
         
@@ -286,59 +323,3 @@ def augment(imgs, msks, iterations):
     msks = np.stack([data[1] for data in outputs])
     
     return imgs, msks
-
-#%% Function: predict() -------------------------------------------------------
-
-'''
-- Predict data larger than VRAM
-'''
-
-def predict(
-        imgs, 
-        model_path, 
-        img_norm="global",
-        patch_overlap=0,
-        ):
-    
-    global prds
-
-    valid_norms = ["global", "image"]
-    if img_norm not in valid_norms:
-        raise ValueError(
-            f"Invalid value for img_norm: '{img_norm}'."
-            f" Expected one of {valid_norms}."
-            )
-        
-    # Nested function(s) ------------------------------------------------------
-        
-    # Execute -----------------------------------------------------------------
-    
-    # Load report
-    with open(str(model_path / "report.pkl"), "rb") as f:
-        report = pickle.load(f)
-    
-    # Load model
-    model = sm.Unet(
-        report["backbone"], 
-        input_shape=(None, None, 1), 
-        classes=1, 
-        activation="sigmoid", 
-        encoder_weights=None,
-        )
-    
-    # Load weights
-    model.load_weights(model_path / "weights.h5") 
-       
-    # Preprocess
-    patches = preprocess(
-        imgs, msks=None, 
-        img_norm=img_norm,
-        patch_size=report["patch_size"], 
-        patch_overlap=patch_overlap,
-        )
-
-    # Predict
-    prds = model.predict(patches).squeeze()
-    prds = merge_patches(prds, imgs.shape, patch_overlap)
-    
-    return prds

@@ -23,36 +23,23 @@ from skimage.segmentation import find_boundaries, expand_labels, flood_fill
 #%% Comments ------------------------------------------------------------------
 
 '''
-Bug
-- if mask_suffix, the suffix add every time it saves
-
+Priority
+- When changing mask suffix in Napari, the preexisting masks with same suffix 
+should be displayed.
 
 Todo
-- Manage output format for mask (uint8 or uint16)
-- Something wrong with font size in Napari (probably due to last pyqt version)
-- Reset view on first image?
 - RGB image support
+- Reset view on first image
 - Parameter handling (default, autosaved etc)
+- Manage output format for mask (uint8 or uint16)
 '''
-
-#%% Inputs --------------------------------------------------------------------
-
-# Paths
-train_path = Path(Path.cwd().parent, "data", "train_tissue")
-
-# Parameters
-edit = True
-randomize = True
-# np.random.seed(42)
-brush_size = 20
 
 #%% Class : Annotate() --------------------------------------------------------
 
 class Annotate:
     
-    def __init__(self, train_path, edit=True, randomize=True):
+    def __init__(self, train_path, randomize=True):
         self.train_path = train_path
-        self.edit = edit
         self.randomize = randomize
         self.idx = 0
         self.init_paths()
@@ -71,7 +58,7 @@ class Annotate:
     def init_paths(self):
         self.img_paths, self.msk_paths = [], []
         for img_path in self.train_path.iterdir():
-            if "mask" not in img_path.name:
+            if img_path.is_file() and "mask" not in img_path.name:
                 self.img_paths.append(img_path)
                 self.msk_paths.append(
                     Path(str(img_path).replace(".tif", "_mask.tif")))
@@ -82,12 +69,7 @@ class Annotate:
             
     def update_msk_suffix(self):
         self.msk_suffix = self.line_msk_suffix.text() 
-        
-    # def update_msk_paths(self):
-    #     for i, msk_path in enumerate(self.msk_paths):
-    #         self.msk_paths[i] = Path(str(msk_path).replace(
-    #             ".tif", f"{self.msk_suffix}.tif"))
-            
+
     def update_msk_paths(self):
         for i, img_path in enumerate(self.img_paths):
             self.msk_paths[i] = Path(str(img_path).replace(
@@ -97,9 +79,9 @@ class Annotate:
         self.imgs, self.msks = [], []
         for img_path, msk_path in zip(self.img_paths, self.msk_paths):
             img = io.imread(img_path)
-            if msk_path.exists() and self.edit:   
+            if msk_path.exists():   
                 msk = io.imread(msk_path)
-            elif not msk_path.exists():
+            else:
                 msk = np.zeros_like(img, dtype="uint8")
             self.imgs.append(img)
             self.msks.append(msk)
@@ -110,7 +92,7 @@ class Annotate:
         self.viewer = napari.Viewer()
         self.viewer.add_image(self.imgs[0], name="image")
         self.viewer.add_labels(self.msks[0], name="mask")
-        self.viewer.layers["mask"].brush_size = brush_size
+        self.viewer.layers["mask"].brush_size = 20
         self.viewer.layers["mask"].mode = 'paint'
         
         # Contrast limits
@@ -139,7 +121,7 @@ class Annotate:
         seg_group_layout = QHBoxLayout()
         self.rad_semantic = QRadioButton("Semantic")
         self.rad_instance = QRadioButton("Instance")
-        self.rad_instance.setChecked(True)
+        self.rad_semantic.setChecked(True)
         seg_group_layout.addWidget(self.rad_semantic)
         seg_group_layout.addWidget(self.rad_instance)
         self.seg_group_box.setLayout(seg_group_layout)
@@ -402,9 +384,9 @@ class Annotate:
         img_path = self.img_paths[self.idx]
         msk_path = self.msk_paths[self.idx]
         img_name = img_path.name    
-        if msk_path.exists() and edit:
+        if msk_path.exists():
             msk_name = msk_path.name 
-        elif not msk_path.exists():
+        else :
             msk_name = "None"
         img_name = shorten_filename(img_name, max_length=32)
         msk_name = shorten_filename(msk_name, max_length=32)
@@ -463,8 +445,3 @@ class Annotate:
             f"<span{style2}>- Pick Label      {spacer * 5}:</span>"
             f"<span{style4}> Shift+Mouse[Left]</span><br>"
             )
-        
-#%% Execute -------------------------------------------------------------------
-
-if __name__ == "__main__":
-    annotate = Annotate(train_path, edit=edit, randomize=randomize)

@@ -33,10 +33,15 @@ def extract(path, df, save=False, save_path=None):
             save_name = path.stem + f"_pix({pixSize * df:.3f})_{i:02d}.tif"
             
             if save_path == None:
-                save_path = Path(path, save_name)
+                io.imsave(
+                    Path(path, save_name), img.astype("uint16"),
+                    check_contrast=False
+                    )
             else:
-                save_path = Path(save_path, save_name)
-            io.imsave(save_path, img.astype("uint16"), check_contrast=False)
+                io.imsave(
+                    Path(save_path, save_name), img.astype("uint16"),
+                    check_contrast=False
+                    )
         
             del img
             gc.collect()
