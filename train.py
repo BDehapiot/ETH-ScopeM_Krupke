@@ -10,13 +10,13 @@ from bdmodel.functions import get_paths
 #%% Inputs --------------------------------------------------------------------    
 
 # Paths
-train_path = Path(Path.cwd(), "data", "train_tissue")
+train_path = Path(Path.cwd(), "data", "train")
 
 # Parameters
 ext = ".tif"
-msk_name = "_mask-mass"
+msk_name = "_mask-surface"
 tags_in = [msk_name]
-save_name = "mass"
+save_name = "surface_surface_768"
     
 #%% Execute -------------------------------------------------------------------
     
@@ -35,13 +35,13 @@ if __name__ == "__main__":
         save_name=save_name,
         save_path=Path.cwd(),
         msk_type="normal",
-        img_norm="global",
+        img_norm="image",
         patch_size=768,
-        patch_overlap=32,
-        nAugment=100,
+        patch_overlap=384,
+        nAugment=0,
         backbone="resnet18",
         epochs=200,
-        batch_size=4,
+        batch_size=8,
         validation_split=0.2,
         learning_rate=0.0005,
         patience=30,

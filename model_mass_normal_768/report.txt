@@ -1,0 +1,17 @@
+date: 2024-11-13_14h13m35s
+save_name: model_surface_normal_768
+save_path: c:\users\bdeha\projects\eth-scopem_krupke\model_surface_normal_768
+msk_type: normal
+img_norm: image
+patch_size: 768
+patch_overlap: 384
+img/patches: 182
+augmentation: 0
+backbone: resnet18
+epochs: 200
+batch_size: 8
+validation_split: 0.2000
+learning_rate: 0.0005
+patience: 30
+best_epoch: 112
+best_val_loss: 0.0119
