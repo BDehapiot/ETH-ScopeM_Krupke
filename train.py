@@ -14,9 +14,9 @@ train_path = Path(Path.cwd(), "data", "train")
 
 # Parameters
 ext = ".tif"
-msk_name = "_mask-surface"
+msk_name = "_mask-surface2"
 tags_in = [msk_name]
-save_name = "surface_surface_768"
+save_name = "surface_surface2_768"
     
 #%% Execute -------------------------------------------------------------------
     

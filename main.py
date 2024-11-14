@@ -11,7 +11,6 @@ import matplotlib.pyplot as plt
 from extract import extract
 
 # bdmodel
-from bdmodel.functions import preprocess
 from bdmodel.predict import predict
 
 # bdtools
@@ -30,11 +29,11 @@ from scipy.ndimage import distance_transform_edt
 #%% Inputs --------------------------------------------------------------------
 
 # Paths
-img_name = "20240709-41_5 merged.lif" # image name
+img_name = "all" # image name ("all" for batch processing)
+# img_name = "20240709-41_5 merged.lif" # image name ("all" for batch processing)
 data_path = Path("D:\local_Krupke\data")
 model_mass_path = Path.cwd() / "model_mass_normal_768"
-model_surface_path = Path.cwd() / "model_surface_normal_768"
-img_path = data_path / img_name
+model_surface_path = Path.cwd() / "model_surface2_normal_768"
 
 # Parameters
 df = 30 # downscale factor (should be kept at 30)
@@ -63,109 +62,90 @@ def analyse(img, edm, pixSize, df, tophat=None):
     values = [arr.mean() if len(arr) > 0 else 0 for arr in binned_y]
     return bins, values
 
+def main(img_path, df):
+    
+    global display
+    
+    # Extract
+    img, pixSize = extract(img_path, df)    
+    
+    # Predict
+    prds_mass = predict(img, model_mass_path, img_norm="image")
+    prds_surface = predict(img, model_surface_path, img_norm="image")
+    
+    # Process
+    msk, outlines, edm = process(prds_mass, prds_surface)
+    
+    # Analyse
+    tophat = white_tophat(img, footprint=disk(21)) # Subtract background
+    bins, values = analyse(tophat, edm, pixSize, df)
+    bins *= pixSize * df
+    dataframe = pd.DataFrame({
+        'Dist. (µm)': bins[:-1],
+        'Fluo. Int. (A.U.)': values,
+        }).round(3)
+    
+    # Plot
+    plt.hist(bins[:-1], bins=bins, weights=values, edgecolor='black')
+    plt.xlabel("Distance from the surface (µm)")
+    plt.ylabel("Fluorescence intensity (A.U.)")
+    
+    # Display
+    display = np.zeros((img.shape[0], img.shape[1], 3)).astype("uint8")
+    img_display = adjust_gamma(norm_pct(norm_gcn(img)), gamma=0.5)
+    out_display = binary_dilation(outlines * 1)
+    img_display = (img_display * 255).astype("uint8")
+    out_display = (out_display * 255).astype("uint8")
+    display[..., 0] = img_display
+    display[..., 1] = np.maximum(img_display, out_display)
+    display[..., 2] = img_display
+    
+    # Save
+    save_path = img_path.parent / img_path.stem
+    save_path.mkdir(exist_ok=True)
+    
+    dataframe.to_csv(save_path / "results.csv", index=False)
+    
+    plt.savefig(save_path / "results.png")
+    plt.close()
+    
+    io.imsave(
+        save_path / "img.tif", img.astype("uint16"), 
+        check_contrast=False,
+        )
+    io.imsave(
+        save_path / "mask.tif", (msk * 255).astype("uint8"), 
+        check_contrast=False,
+        )
+    io.imsave(
+        save_path / "outlines.tif", (outlines * 255).astype("uint8"), 
+        check_contrast=False,
+        )
+    io.imsave(
+        save_path / "edm.tif", edm.astype("float32"), 
+        check_contrast=False,
+        )
+    io.imsave(
+        save_path / "tophat.tif", tophat.astype("float32"), 
+        check_contrast=False,
+        )
+    io.imsave(
+        save_path / "display.tif", display, 
+        check_contrast=False,
+        )
+
 #%% Execute -------------------------------------------------------------------
 
 if __name__ == "__main__":
+    
+    if img_name == "all":
+        for path in data_path.glob("*.lif"):
+            main(path, df)
+    else:
+        path = data_path / img_name
+        main(path, df)
 
-    from bdtools.patch import extract_patches   
-    from bdmodel.functions import preprocess
-
-    # Extract
-    img, pixSize = extract(img_path, df)    
-        
-    # Preprocess
-    patches = preprocess(
-        img, msks=None, 
-        img_norm="image",
-        patch_size=768, 
-        patch_overlap=0,
-        )
-    
-    '''
-    
-    - something is wrong with one patch prediction!
-    
-    '''
-    
-    # Display
-    viewer = napari.Viewer()
-    viewer.add_image(patches)
-    # viewer.add_image(prds_mass)
-    # viewer.add_image(prds_surface)
-    
-    # # Predict
-    # prds_mass = predict(img, model_mass_path, img_norm="image")
-    # prds_surface = predict(img, model_surface_path, img_norm="image")
-    
-    # # Display
-    # viewer = napari.Viewer()
-    # viewer.add_image(img)
-    # viewer.add_image(prds_mass)
-    # viewer.add_image(prds_surface)
-    
-    # # Process
-    # msk, outlines, edm = process(prds_mass, prds_surface)
-    
-    # # Analyse
-    # img = white_tophat(img, footprint=disk(21)) # Subtract background
-    # bins, values = analyse(img, edm, pixSize, df)
-    # bins *= pixSize * df
-    # dataframe = pd.DataFrame({
-    #     'Dist. (µm)': bins[:-1],
-    #     'Fluo. Int. (A.U.)': values,
-    #     })
-    
-    # # Plot
-    # plt.hist(bins[:-1], bins=bins, weights=values, edgecolor='black')
-    # plt.xlabel("Distance from the surface (µm)")
-    # plt.ylabel("Fluorescence intensity (A.U.)")
-    
-    # # Display
-    # display = np.zeros((img.shape[0], img.shape[1], 3)).astype("uint8")
-    # img_display = adjust_gamma(norm_pct(norm_gcn(img)), gamma=0.5)
-    # out_display = binary_dilation(outlines * 1)
-    # img_display = (img_display * 255).astype("uint8")
-    # out_display = (out_display * 255).astype("uint8")
-    # display[..., 0] = img_display
-    # display[..., 1] = np.maximum(img_display, out_display)
-    # display[..., 2] = img_display
-    
-    # # Save
-    # save_path = img_path.parent / img_path.stem
-    # save_path.mkdir(exist_ok=True)
-    
-    # dataframe.to_csv(save_path / "results.csv", index=False)
-    
-    # plt.savefig(save_path / "results.png")
-    # plt.close()
-    
-    # io.imsave(
-    #     save_path / "img.tif", 
-    #     img.astype("uint16"), 
-    #     check_contrast=False,
-    #     )
-    # io.imsave(
-    #     save_path / "mask.tif", 
-    #     (msk * 255).astype("uint8"), 
-    #     check_contrast=False,
-    #     )
-    # io.imsave(
-    #     save_path / "outlines.tif", 
-    #     (outlines * 255).astype("uint8"), 
-    #     check_contrast=False,
-    #     )
-    # io.imsave(
-    #     save_path / "edm.tif", 
-    #     edm.astype("float32"), 
-    #     check_contrast=False,
-    #     )
-    # io.imsave(
-    #     save_path / "display.tif", 
-    #     display, 
-    #     check_contrast=False,
-    #     )
-        
-    # # Display
-    # viewer = napari.Viewer()
-    # viewer.add_image(display)
+        # Display
+        viewer = napari.Viewer()
+        viewer.add_image(display)
     
