@@ -33,7 +33,8 @@ img_name = "all" # image name ("all" for batch processing)
 # img_name = "20240709-41_5 merged.lif" # image name ("all" for batch processing)
 data_path = Path("D:\local_Krupke\data")
 model_mass_path = Path.cwd() / "model_mass_normal_768"
-model_surface_path = Path.cwd() / "model_surface2_normal_768"
+model_surface_path = Path.cwd() / "model_surface_normal_768"
+# model_surface_path = Path.cwd() / "model_surface2_normal_768"
 
 # Parameters
 df = 30 # downscale factor (should be kept at 30)
@@ -44,7 +45,7 @@ num_bins = 100 # number of bins between 0 and max bin
 
 def process(prds_mass, prds_surface):
     msk_mass = prds_mass > 0.5
-    msk_mass = remove_small_holes(msk_mass, area_threshold=1024)
+    msk_mass = remove_small_holes(msk_mass, area_threshold=4096)
     msk_mass = remove_small_objects(msk_mass, min_size=4096)
     outlines = msk_mass ^ binary_erosion(msk_mass, footprint=disk(1), mode="min")    
     msk_surface = prds_surface > 0.5
