@@ -3,6 +3,9 @@
 from skimage import io
 from pathlib import Path
 
+# bdtools
+from bdtools import norm_gcn, norm_pct
+
 # Napari
 import napari
 from napari.layers.labels.labels import Labels
@@ -12,10 +15,17 @@ from qtpy.QtGui import QFont
 from qtpy.QtWidgets import (
     QPushButton, QGroupBox, QVBoxLayout, QWidget, QLabel)
 
+# Skimage
+from skimage.morphology import skeletonize
+
 #%% Inputs --------------------------------------------------------------------
 
 # Paths
 data_path = Path("D:\local_Krupke\data")
+
+# Parameters
+erase_size = 50
+paint_size = 5
 
 #%% Class : Correct() ---------------------------------------------------------
 
@@ -35,6 +45,7 @@ class Correct:
             self.imgs.append(io.imread(path))
             self.outs.append(
                 io.imread(str(path).replace("image", "outline")))
+        self.imgs = [norm_pct(norm_gcn(img)) for img in self.imgs]
     
     def init_viewer(self):
         
@@ -44,7 +55,7 @@ class Correct:
             self.imgs[0].copy(), name="image", gamma=0.5, opacity=0.75)
         self.viewer.add_labels(
             self.outs[0].copy(), name="outline", blending="translucent")
-        self.viewer.layers["outline"].brush_size = 60
+        self.viewer.layers["outline"].brush_size = erase_size
         self.viewer.layers["outline"].mode = "erase"
         
         # Create "Actions" menu
@@ -102,6 +113,13 @@ class Correct:
         def revert_outline_key(viewer):
             self.revert_outline() 
             
+        @self.viewer.bind_key("Shift", overwrite=True)
+        def edit_outline_key(viewer):
+            self.paint()
+            yield
+            self.edit_outline() 
+            self.erase()
+            
         @self.viewer.bind_key("Space", overwrite=True)
         def pan_switch_key1(viewer):
             self.pan()
@@ -145,10 +163,21 @@ class Correct:
     def revert_outline(self):
         self.viewer.layers["outline"].data = self.outs[self.idx].copy()
         
+    def edit_outline(self):
+        out_hc = self.viewer.layers["outline"].data > 0
+        out_hc = skeletonize(out_hc)
+        out_hc = (out_hc * 255).astype("uint8")
+        self.viewer.layers["outline"].data = out_hc
+        
     def pan(self):
         self.viewer.layers["outline"].mode = "pan_zoom"
         
+    def paint(self):
+        self.viewer.layers["outline"].brush_size = 5
+        self.viewer.layers["outline"].mode = "paint"
+        
     def erase(self):
+        self.viewer.layers["outline"].brush_size = 60
         self.viewer.layers["outline"].mode = "erase"
         
     def show_outline(self):
@@ -202,18 +231,21 @@ class Correct:
             f"<span{style2}>- Next/Prev Image {spacer * 0}:</span>"
             f"<span{style3}> Page[Up/Down]</span><br>"
             
+            f"<span{style2}>- Edit Outline    {spacer * 3}:</span>"
+            f"<span{style3}> Shift</span><br>" 
+            
             f"<span{style2}>- Save Outline    {spacer * 3}:</span>"
             f"<span{style3}> Enter</span><br>"  
             
             f"<span{style2}>- Revert Outline  {spacer * 1}:</span>"
             f"<span{style3}> Delete</span><br>"
             
+            f"<span{style2}>- Hide Outline    {spacer * 3}:</span>"
+            f"<span{style3}> Backspace</span><br>"  
+            
             f"<span{style2}>- Pan Image       {spacer * 6}:</span>"
             f"<span{style3}> Space or Num[0]</span><br>" 
             
-            f"<span{style2}>- Hide Outline    {spacer * 3}:</span>"
-            f"<span{style3}> Backspace</span><br>"  
-
             )    
             
 #%% Execute -------------------------------------------------------------------

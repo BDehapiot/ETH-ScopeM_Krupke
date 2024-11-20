@@ -1,6 +1,7 @@
 #%% Imports -------------------------------------------------------------------
 
 import pickle
+import shutil
 import numpy as np
 from skimage import io
 from pathlib import Path
@@ -13,14 +14,14 @@ from bdmodel.predict import predict
 from skimage.transform import downscale_local_mean
 from skimage.morphology import (
     remove_small_holes, remove_small_objects, 
-    disk, binary_erosion, white_tophat
+    disk, binary_erosion, binary_dilation, white_tophat
     )
 
 #%% Inputs --------------------------------------------------------------------
 
 # Paths
 img_name = "all" # image name ("all" for batch processing)
-# img_name = "20240709-7_1 merged_new.lif" # image name ("all" for batch processing)
+# img_name = "240611-24_4 merged.lif" # image name ("all" for batch processing)
 data_path = Path("D:\local_Krupke\data")
 model_mass_path = Path.cwd() / "model_mass_normal_768"
 
@@ -54,16 +55,21 @@ def clear_borders(out, width=0.01):
     out[..., :x0] = 0 ; out[..., x1:] = 0
     return out
 
-def get_outline(msk):
+def get_outline(msk, img):
     out = msk ^ binary_erosion(
         msk, footprint=disk(1), mode="min") 
     out = clear_borders(out, width=0.02)
+    tmp_msk = img == 0
+    tmp_msk = binary_dilation(tmp_msk, footprint=disk(3))
+    out[tmp_msk] = 0
     return out
 
 def process(img_path, df):
     
     # Paths
     dir_path = img_path.parent / img_path.stem
+    if dir_path.exists():
+        shutil.rmtree(dir_path)
     dir_path.mkdir(exist_ok=True)
     
     # Extract
@@ -74,7 +80,7 @@ def process(img_path, df):
     
     # Get mask & out
     msk = get_mask(prd)
-    out = get_outline(msk)
+    out = get_outline(msk, img)
     
     # Subtract background
     tph = white_tophat(img, footprint=disk(21))
@@ -82,8 +88,8 @@ def process(img_path, df):
     # Save
     metadata = {
         "df" : df,
-        "pixel_size": pixel_size,
-        "pixel_size_df": pixel_size * df,
+        "pixel_size (µm)": pixel_size,
+        "pixel_size_df (µm)": pixel_size * df,
         }
     
     with open(str(dir_path / "metadata.txt"), "w") as f:
