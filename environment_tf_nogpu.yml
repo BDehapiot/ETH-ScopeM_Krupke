@@ -1,4 +1,4 @@
-name: Krupke_nogpu
+name: Krupke
 
 channels:
   - conda-forge
