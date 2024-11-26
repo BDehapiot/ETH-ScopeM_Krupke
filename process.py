@@ -26,9 +26,7 @@ data_path = Path("D:\local_Krupke\data")
 model_mass_path = Path.cwd() / "model_mass_normal_768"
 
 # Parameters
-df = 30 # downscale factor (should be kept at 30)
-max_bin = 1000 # max bin distance in µm
-num_bins = 100 # number of bins between 0 and max bin
+df = 30 # downscaling factor, should be kept at 30 (DL model)
 
 #%% Function(s) ---------------------------------------------------------------
 
