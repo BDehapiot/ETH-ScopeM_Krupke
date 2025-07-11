@@ -7,7 +7,7 @@
 ![License Badge](https://img.shields.io/badge/Licence-GNU%20General%20Public%20License%20v3.0-blue?labelColor=rgb(50%2C60%2C65)&color=rgb(149%2C157%2C165))    
 
 # ETH-ScopeM_Krupke  
-Fluorescent dye intra-tissue diffusion analysis
+Fluorescent dye intra-tissue diffusion analysis  
 This code is published here: https://doi.org/10.1016/j.jconrel.2025.113947
 
 ## Index
