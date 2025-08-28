@@ -18,15 +18,16 @@ dependencies:
   - pip
   # conda_spec
   - napari
-  - pyqt=5.15.9
+  - pyqt
   - spyder
   # conda_tf_nogpu
   - pip:
     # pip_core
-    - bd-tools==0.2.1
+    - bd-tools
     # pip_spec
     - readlif
     # pip_tf_nogpu
     - albumentations
     - segmentation-models
     - tensorflow==2.10
+    - h5py==3.11.0
