@@ -8,7 +8,7 @@
 
 # ETH-ScopeM_Krupke  
 Fluorescent dye intra-tissue diffusion analysis  
-This code is published here: https://doi.org/10.1016/j.jconrel.2025.113947
+This code is published here: https://doi.org/10.1016/j.jconrel.2025.113947  
 Published version: "v1.0-paper"
 
 ## Index
