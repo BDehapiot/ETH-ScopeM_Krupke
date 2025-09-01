@@ -20,7 +20,7 @@ from scipy.ndimage import distance_transform_edt
 #%% Inputs --------------------------------------------------------------------
 
 # Paths
-data_path = Path("D:\local_Krupke\data")
+data_path = Path("D:\local_Krupke\data_new")
 img_paths = list(data_path.glob("**/*image.tif"))
 
 # Parameters
@@ -32,18 +32,18 @@ baseline_pc = 10  # percentage (0 to 100) of lowest values to be considered base
 
 def analyse(img_path, max_bin=1000, num_bins=100):
         
-    def _analyse(tph, edt, pixel_size, df, max_bin=max_bin, num_bins=num_bins):    
+    def _analyse(img, edt, pixel_size, df, max_bin=max_bin, num_bins=num_bins):    
         
-        y, x = tph.ravel(), edt.ravel()
+        y, x = img.ravel(), edt.ravel()
         max_bin_pix = max_bin / (pixel_size * df)
         bins = np.linspace(0, max_bin_pix, num_bins + 1)
         indices = np.digitize(x, bins)
         binned_y = [y[indices == i] for i in range(1, len(bins))]
-        values = [arr.mean() if len(arr) > 0 else 0 for arr in binned_y]
+        values = [arr.mean() if len(arr) > 0 else np.nan for arr in binned_y] # np.nan instead of 0s
         bins *= pixel_size * df
         
         if baseline_pc != 0:
-            baseline = np.percentile(values, baseline_pc)
+            baseline = np.nanpercentile(values, baseline_pc)
             values -= baseline
         else:
             baseline = np.nan

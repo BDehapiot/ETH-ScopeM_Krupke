@@ -21,7 +21,7 @@ from skimage.morphology import skeletonize
 #%% Inputs --------------------------------------------------------------------
 
 # Paths
-data_path = Path("D:\local_Krupke\data")
+data_path = Path("D:\local_Krupke\data_new")
 
 # Parameters
 erase_size = 50

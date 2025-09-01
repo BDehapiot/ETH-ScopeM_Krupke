@@ -22,7 +22,7 @@ from skimage.morphology import (
 # Paths
 img_name = "all" # image name ("all" for batch processing)
 # img_name = "240611-24_4 merged.lif" # image name ("all" for batch processing)
-data_path = Path("D:\local_Krupke\data")
+data_path = Path("D:\local_Krupke\data_new")
 model_mass_path = Path.cwd() / "model_mass_normal_768"
 
 # Parameters
