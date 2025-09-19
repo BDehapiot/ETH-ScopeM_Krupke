@@ -18,9 +18,9 @@ from qtpy.QtWidgets import (
     QPushButton, QGroupBox, QVBoxLayout, QWidget, QLabel)
 
 # Skimage
-from skimage.measure import label
-from skimage.morphology import skeletonize
 from skimage.segmentation import flood_fill
+from skimage.measure import label, regionprops
+from skimage.morphology import skeletonize, binary_erosion
 
 #%% Inputs --------------------------------------------------------------------
 
@@ -49,13 +49,14 @@ class Correct:
         
     def init_images(self):        
         self.img_paths = list(data_path.glob("**/*image.tif"))
-        self.imgs, self.msks, self.pnts = [], [], []
+        self.imgs, self.msks, self.pnts, self.outs = [], [], [], []
         for path in self.img_paths:
             img = io.imread(path)
             msk = io.imread(str(path).replace("image", "mask"))
             self.imgs.append(img)
             self.msks.append(msk)
             self.pnts.append(np.zeros_like(msk))
+            self.outs.append(np.zeros_like(msk))
         self.imgs = [norm_pct(norm_gcn(img)) for img in self.imgs]
     
     def init_viewer(self):
@@ -73,6 +74,10 @@ class Correct:
         self.viewer.add_labels(
             self.pnts[0].copy(), name="pnt", visible=1,
             opacity=0.50, blending="translucent",
+            )
+        self.viewer.add_image(
+            self.outs[0].copy(), name="out", visible=1,
+            blending="additive",
             )
         self.viewer.layers["msk"].brush_size = brush_size
         self.viewer.layers["msk"].mode = "paint"
@@ -198,11 +203,25 @@ class Correct:
             self.idx += 1
             self.open_images()
             
+    def get_outline(self, msk_hc, pnt_hc):
+        tmp_out = msk_hc ^ binary_erosion(msk_hc)
+        tmp_out = tmp_out & ~pnt_hc
+        coords, ints = [], []
+        for props in regionprops(label(tmp_out), intensity_image=self.imgs[self.idx]):
+            coords.append(props.coords)
+            ints.append(props.intensity_mean)
+        idx = np.argmax(ints)
+        out = np.zeros_like(tmp_out, dtype="uint8")
+        out[tuple(coords[idx].T)] = 255
+        return out        
+    
     def save_mask(self):
         msk_hc = self.viewer.layers["msk"].data
         pnt_hc = self.viewer.layers["pnt"].data
-        if np.max(label(pnt_hc)) != 3:
+        if np.max(label(pnt_hc)) != 2:
             raise ValueError("The mask was not saved, please check pnt layer")
+        out = self.get_outline(msk_hc, pnt_hc)
+        self.viewer.layers["out"].data = out
         io.imsave(
             str(self.img_paths[self.idx]).replace("image", "mask_hc"),
             msk_hc.astype("uint8"), 
@@ -220,10 +239,12 @@ class Correct:
     def show_layers(self):
         self.viewer.layers["msk"].visible = True
         self.viewer.layers["pnt"].visible = True
+        self.viewer.layers["out"].visible = True
     
     def hide_layers(self):
         self.viewer.layers["msk"].visible = False
         self.viewer.layers["pnt"].visible = False
+        self.viewer.layers["out"].visible = False
         
     def pan(self):
         name = self.viewer.layers.selection.active.name
@@ -251,6 +272,8 @@ class Correct:
     def open_images(self):
         self.viewer.layers["img"].data = self.imgs[self.idx].copy()
         self.viewer.layers["msk"].data = self.msks[self.idx].copy()
+        self.viewer.layers["pnt"].data = self.pnts[self.idx].copy()
+        self.viewer.layers["out"].data = self.outs[self.idx].copy()
         self.get_info_text()
         
     # Text 
@@ -315,24 +338,36 @@ if __name__ == "__main__":
     
 #%% development ---------------------------------------------------------------
 
-    # from skimage.morphology import binary_erosion
+    from skimage.morphology import binary_erosion, binary_dilation
 
-    # # Paths
-    # lif_paths = list(data_path.glob("*.lif"))
-    # path = lif_paths[0]
-    # msk_hc_path = path.parent / path.stem / "mask_hc.tif"
-    # pnt_hc_path = path.parent / path.stem / "point_hc.tif"
+    # Paths
+    name = "old_20240611-12_2"
+    img_path = data_path / name / "image.tif"
+    msk_hc_path = data_path / name / "mask_hc.tif"
+    pnt_hc_path = data_path / name / "point_hc.tif"
     
-    # # Load
-    # msk_hc = io.imread(msk_hc_path) > 0
-    # pnt_hc = io.imread(pnt_hc_path) > 0
+    # Load
+    img = io.imread(img_path)
+    msk_hc = io.imread(msk_hc_path) > 0
+    pnt_hc = io.imread(pnt_hc_path) > 0
     
-    # # Process
-    # out = msk_hc ^ binary_erosion(msk_hc)
-    # out = out & ~pnt_hc
+    # Get outline    
+    tmp_out = msk_hc ^ binary_erosion(msk_hc)
+    tmp_out = tmp_out & ~pnt_hc
+    tmp_out = binary_dilation(tmp_out)
+    out = np.zeros_like(tmp_out)
+    for props in regionprops(label(tmp_out), intensity_image=pnt_hc):
+        coords = props.coords
+        vals = pnt_hc[tuple(coords.T)]
+        if np.sum(vals) == 2:
+            out[tuple(coords.T)] = 1
+            
     
-    # # Display
-    # vwr = napari.Viewer()
-    # vwr.add_image(msk_hc, visible=0)
-    # vwr.add_image(pnt_hc, visible=0)
-    # vwr.add_image(out, visible=1)
+    # out = get_outline(img, msk_hc, pnt_hc)
+    
+    # Display
+    vwr = napari.Viewer()
+    vwr.add_image(msk_hc, visible=0)
+    vwr.add_image(pnt_hc, visible=1, colormap="yellow")
+    vwr.add_image(tmp_out, visible=1, colormap="magenta", blending="additive")
+    vwr.add_image(out, visible=1, colormap="green", blending="additive")
