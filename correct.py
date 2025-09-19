@@ -1,5 +1,6 @@
 #%% Imports -------------------------------------------------------------------
 
+import numpy as np
 from skimage import io
 from pathlib import Path
 
@@ -12,11 +13,14 @@ from napari.layers.labels.labels import Labels
 
 # Qt
 from qtpy.QtGui import QFont
+from qtpy.QtCore import QTimer
 from qtpy.QtWidgets import (
     QPushButton, QGroupBox, QVBoxLayout, QWidget, QLabel)
 
 # Skimage
+from skimage.measure import label
 from skimage.morphology import skeletonize
+from skimage.segmentation import flood_fill
 
 #%% Inputs --------------------------------------------------------------------
 
@@ -24,8 +28,7 @@ from skimage.morphology import skeletonize
 data_path = Path(r"\\scopem-idadata.ethz.ch\BDehapiot\remote_Krupke\data")
 
 # Parameters
-erase_size = 50
-paint_size = 5
+brush_size = 10
 
 #%% Class : Correct() ---------------------------------------------------------
 
@@ -38,13 +41,21 @@ class Correct:
         self.init_viewer()
         self.open_images()
         
+        # Timers
+        self.next_brush_size_timer = QTimer()
+        self.next_brush_size_timer.timeout.connect(self.next_brush_size)
+        self.prev_brush_size_timer = QTimer()
+        self.prev_brush_size_timer.timeout.connect(self.prev_brush_size)
+        
     def init_images(self):        
         self.img_paths = list(data_path.glob("**/*image.tif"))
-        self.imgs, self.outs = [], []
+        self.imgs, self.msks, self.pnts = [], [], []
         for path in self.img_paths:
-            self.imgs.append(io.imread(path))
-            self.outs.append(
-                io.imread(str(path).replace("image", "outline")))
+            img = io.imread(path)
+            msk = io.imread(str(path).replace("image", "mask"))
+            self.imgs.append(img)
+            self.msks.append(msk)
+            self.pnts.append(np.zeros_like(msk))
         self.imgs = [norm_pct(norm_gcn(img)) for img in self.imgs]
     
     def init_viewer(self):
@@ -52,28 +63,41 @@ class Correct:
         # Setup viewer
         self.viewer = napari.Viewer()
         self.viewer.add_image(
-            self.imgs[0].copy(), name="image", gamma=0.5, opacity=0.75)
+            self.imgs[0].copy(), name="img", visible=1, 
+            gamma=0.25,
+            )
         self.viewer.add_labels(
-            self.outs[0].copy(), name="outline", blending="translucent")
-        self.viewer.layers["outline"].brush_size = erase_size
-        self.viewer.layers["outline"].mode = "erase"
+            self.msks[0].copy(), name="msk", visible=1,
+            opacity=0.50, blending="translucent",
+            )
+        self.viewer.add_labels(
+            self.pnts[0].copy(), name="pnt", visible=1,
+            opacity=0.50, blending="translucent",
+            )
+        self.viewer.layers["msk"].brush_size = brush_size
+        self.viewer.layers["msk"].mode = "paint"
+        self.viewer.layers["msk"].selected_label = 255
+        self.viewer.layers["pnt"].brush_size = brush_size
+        self.viewer.layers["pnt"].mode = "paint"
+        self.viewer.layers["pnt"].selected_label = 254
+        self.viewer.layers.selection.active = self.viewer.layers["msk"]
         
         # Create "Actions" menu
         self.act_group_box = QGroupBox("Actions")
         act_group_layout = QVBoxLayout()
-        self.btn_next_image = QPushButton("Next Image")
-        self.btn_prev_image = QPushButton("Previous Image")
-        self.btn_save_outline = QPushButton("Save Outline")
-        self.btn_revert_outline = QPushButton("Revert Outline")
+        self.btn_next_image = QPushButton("Next image")
+        self.btn_prev_image = QPushButton("Previous image")
+        self.btn_save_mask = QPushButton("Save mask")
+        self.btn_revert_mask = QPushButton("Revert mask")
         act_group_layout.addWidget(self.btn_next_image)
         act_group_layout.addWidget(self.btn_prev_image)
-        act_group_layout.addWidget(self.btn_save_outline)
-        act_group_layout.addWidget(self.btn_revert_outline)
+        act_group_layout.addWidget(self.btn_save_mask)
+        act_group_layout.addWidget(self.btn_revert_mask)
         self.act_group_box.setLayout(act_group_layout)
         self.btn_next_image.clicked.connect(self.next_image)
         self.btn_prev_image.clicked.connect(self.prev_image)
-        self.btn_save_outline.clicked.connect(self.save_outline)
-        self.btn_revert_outline.clicked.connect(self.revert_outline)
+        self.btn_save_mask.clicked.connect(self.save_mask)
+        self.btn_revert_mask.clicked.connect(self.revert_mask)
         
         # Create text
         self.info_image = QLabel()
@@ -106,20 +130,25 @@ class Correct:
             self.next_image()
             
         @Labels.bind_key("Enter", overwrite=True)
-        def save_outline_key(viewer):
-            self.save_outline() 
+        def save_mask_key(viewer):
+            self.save_mask() 
             
         @self.viewer.bind_key("Delete", overwrite=True)
-        def revert_outline_key(viewer):
-            self.revert_outline() 
+        def revert_mask_key(viewer):
+            self.revert_mask() 
             
-        @self.viewer.bind_key("Shift", overwrite=True)
-        def edit_outline_key(viewer):
-            self.paint()
+        @self.viewer.bind_key("Backspace", overwrite=True)
+        def hide_layers_key(viewer):
+            self.hide_layers()
             yield
-            self.edit_outline() 
-            self.erase()
+            self.show_layers()
             
+        @self.viewer.bind_key("Control", overwrite=True)
+        def layer_switch_key(viewer):
+            self.viewer.layers.selection.active = self.viewer.layers["pnt"]
+            yield
+            self.viewer.layers.selection.active = self.viewer.layers["msk"]
+
         @self.viewer.bind_key("Space", overwrite=True)
         def pan_switch_key1(viewer):
             self.pan()
@@ -132,12 +161,29 @@ class Correct:
             yield
             self.erase()
             
-        @self.viewer.bind_key("Backspace", overwrite=True)
-        def hide_outline_key(viewer):
-            self.hide_outline()
+        @self.viewer.bind_key("Up", overwrite=True)
+        def next_brush_size_key(viewer):
+            self.next_brush_size() 
+            # time.sleep(125 / 1000) 
+            self.next_brush_size_timer.start(30) 
             yield
-            self.show_outline()
-                
+            self.next_brush_size_timer.stop()
+        
+        @self.viewer.bind_key("Down", overwrite=True)
+        def prev_brush_size_key(viewer):
+            self.prev_brush_size() 
+            # time.sleep(125 / 1000) 
+            self.prev_brush_size_timer.start(30) 
+            yield
+            self.prev_brush_size_timer.stop()
+            
+        @self.viewer.mouse_drag_callbacks.append
+        def mouse_actions(viewer, event):
+            if event.button == 2:
+                self.erase()
+                yield
+                self.paint()
+                                
 #%% Functions(s) --------------------------------------------------------------
 
     # Shortcuts
@@ -152,45 +198,59 @@ class Correct:
             self.idx += 1
             self.open_images()
             
-    def save_outline(self):
-        out_hc = self.viewer.layers["outline"].data
+    def save_mask(self):
+        msk_hc = self.viewer.layers["msk"].data
+        pnt_hc = self.viewer.layers["pnt"].data
+        if np.max(label(pnt_hc)) != 3:
+            raise ValueError("The mask was not saved, please check pnt layer")
         io.imsave(
-            str(self.img_paths[self.idx]).replace("image", "outline_hc"),
-            out_hc.astype("uint8"), 
+            str(self.img_paths[self.idx]).replace("image", "mask_hc"),
+            msk_hc.astype("uint8"), 
+            check_contrast=False,
+            )
+        io.imsave(
+            str(self.img_paths[self.idx]).replace("image", "point_hc"),
+            pnt_hc.astype("uint8"), 
             check_contrast=False,
             )
         
-    def revert_outline(self):
-        self.viewer.layers["outline"].data = self.outs[self.idx].copy()
+    def revert_mask(self):
+        self.viewer.layers["msk"].data = self.msks[self.idx].copy()
         
-    def edit_outline(self):
-        out_hc = self.viewer.layers["outline"].data > 0
-        out_hc = skeletonize(out_hc)
-        out_hc = (out_hc * 255).astype("uint8")
-        self.viewer.layers["outline"].data = out_hc
+    def show_layers(self):
+        self.viewer.layers["msk"].visible = True
+        self.viewer.layers["pnt"].visible = True
+    
+    def hide_layers(self):
+        self.viewer.layers["msk"].visible = False
+        self.viewer.layers["pnt"].visible = False
         
     def pan(self):
-        self.viewer.layers["outline"].mode = "pan_zoom"
+        name = self.viewer.layers.selection.active.name
+        self.viewer.layers[name].mode = "pan_zoom"
         
     def paint(self):
-        self.viewer.layers["outline"].brush_size = 5
-        self.viewer.layers["outline"].mode = "paint"
+        name = self.viewer.layers.selection.active.name
+        self.viewer.layers[name].mode = "paint"
         
     def erase(self):
-        self.viewer.layers["outline"].brush_size = 60
-        self.viewer.layers["outline"].mode = "erase"
+        name = self.viewer.layers.selection.active.name
+        self.viewer.layers[name].mode = "erase"
         
-    def show_outline(self):
-        self.viewer.layers["outline"].visible = True
-    
-    def hide_outline(self):
-        self.viewer.layers["outline"].visible = False  
+    def prev_brush_size(self):
+        if self.viewer.layers["msk"].brush_size > 1:
+            self.viewer.layers["msk"].brush_size -= 1
+            self.viewer.layers["pnt"].brush_size -= 1
+        
+    def next_brush_size(self): 
+        self.viewer.layers["msk"].brush_size += 1
+        self.viewer.layers["pnt"].brush_size += 1
 
     # Procedure
 
     def open_images(self):
-        self.viewer.layers["image"].data = self.imgs[self.idx].copy()
-        self.viewer.layers["outline"].data = self.outs[self.idx].copy()
+        self.viewer.layers["img"].data = self.imgs[self.idx].copy()
+        self.viewer.layers["msk"].data = self.msks[self.idx].copy()
         self.get_info_text()
         
     # Text 
@@ -226,24 +286,24 @@ class Correct:
             )
         
         self.info_short.setText(
-            f"<p{style0}>Shortcuts<br><br>" 
+            f"<p{style0}>Shortcuts<br><br>"
             
-            f"<span{style2}>- Next/Prev Image {spacer * 0}:</span>"
+            f"<span{style2}>- Next/Prev image {spacer * 0}:</span>"
             f"<span{style3}> Page[Up/Down]</span><br>"
             
-            f"<span{style2}>- Edit Outline    {spacer * 3}:</span>"
-            f"<span{style3}> Shift</span><br>" 
+            f"<span{style2}>- Paint/Erase {spacer * 0}:</span>"
+            f"<span{style3}> Mouse left/Right</span><br>"
             
-            f"<span{style2}>- Save Outline    {spacer * 3}:</span>"
+            f"<span{style2}>- Save mask    {spacer * 2}:</span>"
             f"<span{style3}> Enter</span><br>"  
             
-            f"<span{style2}>- Revert Outline  {spacer * 1}:</span>"
+            f"<span{style2}>- Revert mask  {spacer * 0}:</span>"
             f"<span{style3}> Delete</span><br>"
             
-            f"<span{style2}>- Hide Outline    {spacer * 3}:</span>"
+            f"<span{style2}>- Hide mask    {spacer * 2}:</span>"
             f"<span{style3}> Backspace</span><br>"  
             
-            f"<span{style2}>- Pan Image       {spacer * 6}:</span>"
+            f"<span{style2}>- Pan image       {spacer * 2}:</span>"
             f"<span{style3}> Space or Num[0]</span><br>" 
             
             )    
@@ -251,4 +311,28 @@ class Correct:
 #%% Execute -------------------------------------------------------------------
 
 if __name__ == "__main__":
-    Correct(data_path)
+    # Correct(data_path)
+    
+#%% development ---------------------------------------------------------------
+
+    # from skimage.morphology import binary_erosion
+
+    # # Paths
+    # lif_paths = list(data_path.glob("*.lif"))
+    # path = lif_paths[0]
+    # msk_hc_path = path.parent / path.stem / "mask_hc.tif"
+    # pnt_hc_path = path.parent / path.stem / "point_hc.tif"
+    
+    # # Load
+    # msk_hc = io.imread(msk_hc_path) > 0
+    # pnt_hc = io.imread(pnt_hc_path) > 0
+    
+    # # Process
+    # out = msk_hc ^ binary_erosion(msk_hc)
+    # out = out & ~pnt_hc
+    
+    # # Display
+    # vwr = napari.Viewer()
+    # vwr.add_image(msk_hc, visible=0)
+    # vwr.add_image(pnt_hc, visible=0)
+    # vwr.add_image(out, visible=1)
