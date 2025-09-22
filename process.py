@@ -12,13 +12,6 @@ from functions import read_lif
 # bdtools
 from bdtools.norm import norm_pct
 from bdtools.models.unet import UNet
-from bdtools.models import preprocess
-
-# skimage
-from skimage.morphology import (
-    remove_small_holes, remove_small_objects, 
-    disk, binary_erosion, binary_dilation,
-    )
 
 #%% Inputs --------------------------------------------------------------------
 
@@ -32,29 +25,6 @@ data_path = Path(r"\\scopem-idadata.ethz.ch\BDehapiot\remote_Krupke\data")
 df = 30 # downscaling factor, should be kept at 30 (DL model)
 
 #%% Function(s) ---------------------------------------------------------------
-
-def get_mask(prd):
-    msk = prd > 0.5
-    msk = remove_small_holes(msk, area_threshold=4096)
-    msk = remove_small_objects(msk, min_size=4096)
-    return msk
-
-def clear_borders(out, width=0.01):
-    nY, nX = out.shape
-    y0, y1 = int(nY * width), int(nY - nY * width)
-    x0, x1 = int(nX * width), int(nX - nX * width)
-    out[:y0, ...] = 0 ; out[y1:, ...] = 0
-    out[..., :x0] = 0 ; out[..., x1:] = 0
-    return out
-
-def get_outline(msk, img):
-    out = msk ^ binary_erosion(
-        msk, footprint=disk(1), mode="min") 
-    out = clear_borders(out, width=0.02)
-    tmp_msk = img == 0
-    tmp_msk = binary_dilation(tmp_msk, footprint=disk(3))
-    out[tmp_msk] = 0
-    return out
 
 def process(img_path, df):
     
@@ -79,15 +49,7 @@ def process(img_path, df):
     prd = unet.predict(norm_pct(img), verbose=0)
     t1 = time.time()
     print(f"{t1 - t0:.3f}s")
-    
-    # Get mask & out
-    t0 = time.time()
-    print("mask & outlines : ", end="", flush=False)
-    msk = get_mask(prd)
-    out = get_outline(msk, img)
-    t1 = time.time()
-    print(f"{t1 - t0:.3f}s")
-            
+                
     # Save
     
     t0 = time.time()
@@ -102,19 +64,11 @@ def process(img_path, df):
 
     # Images
     io.imsave(
-        dir_path / "image.tif", img.astype("uint16"), 
+        dir_path / "img.tif", img.astype("uint16"), 
         check_contrast=False,
         )
     io.imsave(
-        dir_path / "prediction.tif", prd.astype("float32"), 
-        check_contrast=False,
-        )
-    io.imsave(
-        dir_path / "mask.tif", (msk * 255).astype("uint8"), 
-        check_contrast=False,
-        )
-    io.imsave(
-        dir_path / "outline.tif", (out * 255).astype("uint8"), 
+        dir_path / "prd.tif", prd.astype("float32"), 
         check_contrast=False,
         )
     
