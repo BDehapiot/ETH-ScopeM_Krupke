@@ -44,7 +44,7 @@ if __name__ == "__main__":
     
     # for msk_path in msk_paths:
         
-    msk_path = msk_paths[0]
+    msk_path = msk_paths[1]
         
     # Paths 
     pkl_path = Path(str(msk_path).replace("msk.tif", "metadata.pkl"))
@@ -62,12 +62,13 @@ if __name__ == "__main__":
     edt = distance_transform_edt(np.invert(out))
     edt[msk == 0] = 0
     
-    # 
+    # Get intensity profiles
     bins, values = _analyse(img, edt, metadata)
     plt.plot(bins[1:], values)
     
-    # # Display
-    # import napari
-    # vwr = napari.Viewer()
-    # vwr.add_image(img)
-    # vwr.add_image(edt)
+    # Display
+    import napari
+    vwr = napari.Viewer()
+    vwr.add_image(img)
+    vwr.add_image(edt, visible=0)
+    vwr.add_image(out, blending="additive")

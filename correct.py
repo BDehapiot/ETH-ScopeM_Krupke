@@ -161,6 +161,7 @@ class Correct:
             self.outs[0].copy(), name="out", visible=1,
             blending="additive",
             )
+        self.viewer.reset_view()
         
         self.viewer.layers["msk"].brush_size = brush_size
         self.viewer.layers["msk"].mode = "paint"
@@ -291,6 +292,7 @@ class Correct:
         self.viewer.layers["msk"].data = self.msks[self.idx]
         self.viewer.layers["pnt"].data = self.pnts[self.idx]
         self.viewer.layers["out"].data = self.outs[self.idx]
+        self.viewer.reset_view()
         self.get_info()
         
     def save_changes(self):
