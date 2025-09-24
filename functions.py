@@ -20,8 +20,8 @@ def read_lif(path, df):
     img = downscale_local_mean(img, df).astype("uint16")
     metadata = {
         "df" : df,
-        "pixel_size (µm)": pixel_size,
-        "pixel_size_df (µm)": pixel_size * df,
+        "pixel_size" : pixel_size,
+        "pixel_size_df" : pixel_size * df,
         }
     return img, metadata
 
