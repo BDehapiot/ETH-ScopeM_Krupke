@@ -41,9 +41,9 @@ mamba env create -f environment_tf_nogpu.yml
 ```  
 - Activate Conda environment:
 ```bash
-conda activate Krupke
+conda activate Krupke2
 ```
-Your prompt should now start with `(Krupke)` instead of `(base)`
+Your prompt should now start with `(Krupke2)` instead of `(base)`
 
 </details> 
 
@@ -77,9 +77,9 @@ mamba env create -f environment_tf_nogpu.yml
 ```  
 - Activate Conda environment:  
 ```bash
-conda activate Krupke
+conda activate Krupke2
 ```
-Your prompt should now start with `(Krupke)` instead of `(base)`
+Your prompt should now start with `(Krupke2)` instead of `(base)`
 
 </details>
 
@@ -87,84 +87,79 @@ Your prompt should now start with `(Krupke)` instead of `(base)`
 ## Usage
 
 ### `process.py`
-Read `.lif` images from `data_path` folder, process and save outputs in a new
-folder named according to image name.
+Read `.lif` images from `data_path` folder, downscale, predict and save outputs
+in a new folder named accordingly to image name.
 
 - Paths
 ```bash
-- img_name         # str, image name ("all" for batch processing)
-- data_path        # str, path to folder containing image(s) to process
-- model_mass_path  # str, path to DL segmentation model
+- img_name      # str, image name ("all" for batch processing)
+- model_name    # str, model name (saved in the repo root)
+- data_path     # str, path to folder containing nd2 image(s) to process
+
 ```
 
 - Parameters
 ```bash
-- df               # int, downscaling factor, should be kept at 30 (DL model)
+- df            # int, downscaling factor, should be kept at 30 (DL model)
 ```
 
 - Outputs
 ```bash
-- image.tif        # uint16, downscaled image
-- prediction.tif   # float32, DL segmentation prediction
-- mask.tif         # uint8, tissue segmentation mask
-- outline.tif      # uint8, tissue surface mask
-- metadata.txt     # df, original and downscaled pixel size in µm
-- metadata.pkl     # df, original and downscaled pixel size in µm
+- img.tif       # uint16, downscaled image
+- prd.tif       # float32, DL segmentation prediction
+- metadata.txt  # df, original and downscaled pixel size in µm
+- metadata.pkl  # df, original and downscaled pixel size in µm
 ```
 
-<img src='utils/Montage1_RGB_mod.png' width="860" alt="procedure">
+<img src='utils/Montage1_RGB_mod.png' width="430" alt="procedure">
 
 ### `correct.py`
-Read all processed images from `data_path` and display `outline` for manual 
-corrections in Napari. Erase the undesired surface and press enter to save the 
-corrected `outline_hc`.
+Read all processed images from `data_path` and display masks (`msk`) for manual 
+correction. Adjust the masks and define two points (`pnt`) to delimit the 
+considered surface/outline (`out`). Make sure these two points intersect the 
+surface of the mask. When finished, press `Enter` to save the corresponding 
+outputs.
 
 - Paths
 ```bash
-- data_path        # str, path to folder containing image(s) to process
+- data_path  # str, path to folder containing image(s) to process
 ```
 
 - Parameters
 ```bash
-- erase_size       # int, size in pixel(s) of erasing tool
-- paint_size       # int, size in pixel(s) of painting tool
+- brush_size # int, size in pixel(s) of painting/erasing tool
 ```
 
 - Outputs
 ```bash
-- outline_hc.tif   # uint8, corrected tissue surface mask
+- msk.tif    # uint8, mask of the tissue after manual correction
+- pnt.tif    # uint8, mask marking two points that delimit the considered surface/outline
+- out.tif    # uint8, mask of the final considered surface/outline
 ```
 
 <img src='utils/Napari_clipboard.png' width="860" alt="procedure">
 
 ### `analyse.py`
 Read all processed images from `data_path` and compute Euclidean distance 
-transform `edt` of `outline_hc` to measure fluorescence intensities according 
-to the distance from the surface. If not 0, the `baseline_pc` paramater define
-the percentage of lowest values that will be considered to define a baseline
-to define a baseline which will be subtracted from the measured values.
+transform `edt` of the considered surface/outline `out` to measure fluorescence
+intensities according to the distance from the surface.
 
 - Paths
 ```bash
-- data_path        # str, path to folder containing image(s) to process
+- data_path # str, path to folder containing image(s) to process
 ```
 
 - Parameters
 ```bash
-- max_bin          # int, max bin distance in µm
-- num_bins         # int, number of bins between 0 and max_bin
-- baseline_pc      # float, percentage (0 to 100) of lowest values to be considered baseline
+- max_bin   # int, max bin distance in µm
+- num_bins  # int, number of bins between 0 and max_bin
 ```
 
 - Outputs
 ```bash
-- image_bsub.tif   # float32, baseline subtracted image
-- edt.tif          # float32, Euclidean distance transform of outline_hc
-- display.tif      # RGB, image and outline_hc overlay 
-- results.csv      # intensities acc. to distance in µm
-- results.png      # plot of intensities acc. to distance in µm
-- metadata.txt     # add baseline
-- metadata.pkl     # add baseline
+- edt.tif   # float32, Euclidean distance transform of outline_hc
+- prf.csv   # intensities (A.U.) according to distance (µm)
+- fig.png   # plot of intensities (A.U.) according to distance (µm)
 ```
 
 <img src='utils/Montage3_RGB_mod.png' width="860" alt="procedure">

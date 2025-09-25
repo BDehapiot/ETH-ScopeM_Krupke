@@ -1,12 +1,8 @@
 #%% Imports -------------------------------------------------------------------
 
-import pickle
 import numpy as np
 from skimage import io
 from pathlib import Path
-
-# function
-from analyse import get_profile, plot_profile
 
 # bdtools
 from bdtools import norm_gcn, norm_pct
@@ -25,10 +21,6 @@ from qtpy.QtWidgets import (
 from skimage.measure import label, regionprops
 from skimage.morphology import disk, binary_erosion, binary_dilation
 from skimage.morphology import remove_small_holes, remove_small_objects
-
-# matplotlib
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 #%% Inputs --------------------------------------------------------------------
 
@@ -79,7 +71,7 @@ class Correct:
     def init_data(self):        
         
         self.imgs, self.prds = [], []
-        self.msks, self.pnts, self.outs, self.prfs = [], [], [], []
+        self.msks, self.pnts, self.outs = [], [], []
         self.img_paths = list(data_path.glob("**/*img.tif"))
         for img_path in self.img_paths:
             
@@ -305,7 +297,6 @@ class Correct:
         
     def save_changes(self):
         path = str(self.img_paths[self.idx])
-        img = self.viewer.layers["img"].data
         msk = self.viewer.layers["msk"].data.astype("uint8")
         pnt = self.viewer.layers["pnt"].data.astype("uint8")
         if np.max(label(pnt)) != 2:
@@ -316,29 +307,10 @@ class Correct:
         self.pnts[self.idx] = pnt
         self.outs[self.idx] = out
         
-        # Profile
-        with open(path.replace("img.tif", "metadata.pkl"), "rb") as f:
-            metadata = pickle.load(f)
-        edt, prf = get_profile(
-            img, msk, out, metadata, max_bin=10000, num_bins=1000)
-        
-        # Plot
-        if hasattr(self, "canvas"):
-            self.layout.removeWidget(self.canvas)
-            self.canvas.setParent(None)
-            del self.canvas
-        fig = plot_profile(prf)
-        self.canvas = FigureCanvas(fig)
-        self.layout.addWidget(self.canvas)
-        
-        # Close the figure
-        plt.close(fig)
-        
         # Save
         io.imsave(path.replace("img", "msk"), msk, check_contrast=False)
         io.imsave(path.replace("img", "pnt"), pnt, check_contrast=False)
         io.imsave(path.replace("img", "out"), out, check_contrast=False)
-        io.imsave(path.replace("img", "edt"), out, check_contrast=False)
 
     def revert_changes(self):
         msk = get_mask(self.prds[self.idx])

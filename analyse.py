@@ -14,11 +14,12 @@ from scipy.ndimage import distance_transform_edt
 
 # Paths
 data_path = Path(r"\\scopem-idadata.ethz.ch\BDehapiot\remote_Krupke\data")
-msk_paths = list(data_path.glob("**/*msk.tif"))
 
 # Parameters
-max_bin = 10000
-num_bins = 1000
+max_bin = 10000  # max bin distance in µm
+num_bins = 1000  # number of bins between 0 and max bin
+
+# baseline_pc = 10 # percentage (0 to 100) of lowest values to be considered baseline
 
 #%% Function(s) ---------------------------------------------------------------
 
@@ -40,40 +41,43 @@ def get_profile(img, msk, out, metadata, max_bin=10000, num_bins=1000):
     # Get edt  
     edt = distance_transform_edt(np.invert(out))
     edt[msk == 0] = 0
+    edt = edt.astype("float32")
     
     # Get profile
     prf = _get_profile(
         img, edt, metadata, max_bin=max_bin, num_bins=num_bins)
+    
+    # baseline = np.nanpercentile(prf["intensity"], baseline_pc)
+    # prf["intensity_sub"] = prf["intensity"] - baseline
 
     return edt, prf
 
 def plot_profile(prf, theme="dark"):
-    fig, ax = plt.subplots(figsize=(2, 2))
+    fig, ax = plt.subplots()
     ax.hist(
         prf["distance"], bins=prf["distance"], weights=prf["intensity"],
-        color="black",
+        color="gray",
         )
-    ax.set_xlabel("Distance (µm)", fontsize=4)
-    ax.set_ylabel("Fluo. intensity (A.U.)", fontsize=4)  
-    ax.tick_params(axis="both", labelsize=4, width=0.25, length=2)
-    for spine in ax.spines.values():
-        spine.set_linewidth(0.25)
+    ax.set_xlabel("Distance (µm)")
+    ax.set_ylabel("Fluo. intensity (A.U.)")  
     fig.tight_layout()
+    plt.close(fig)
     return fig 
-    
-#%% Execute -------------------------------------------------------------------
 
-if __name__ == "__main__":
+def analyse(msk_path):
     
-    msk_path = msk_paths[0]
-        
+    print(f"analyse - {msk_path.parent.name}")
+    
     # Paths 
-    pkl_path = Path(str(msk_path).replace("msk.tif", "metadata.pkl"))
+    mtd_path = Path(str(msk_path).replace("msk.tif", "metadata.pkl"))
     img_path = Path(str(msk_path).replace("msk", "img"))
-    out_path = Path(str(msk_path).replace("msk", "out")) 
+    out_path = Path(str(msk_path).replace("msk", "out"))
+    edt_path = Path(str(msk_path).replace("msk", "edt"))
+    prf_path = Path(str(msk_path).replace("msk.tif", "prf.csv"))
+    fig_path = Path(str(msk_path).replace("msk.tif", "fig.png"))
     
     # Load
-    with open(str(pkl_path), "rb") as f:
+    with open(str(mtd_path), "rb") as f:
         metadata = pickle.load(f)
     img = io.imread(img_path)
     msk = io.imread(msk_path)
@@ -81,14 +85,20 @@ if __name__ == "__main__":
     
     # Get profile
     edt, prf = get_profile(
-        img, msk, out, metadata, max_bin=10000, num_bins=1000)
+        img, msk, out, metadata, max_bin=max_bin, num_bins=num_bins)
     
     # Plot profile
     fig = plot_profile(prf)
+    
+    # Save
+    io.imsave(edt_path, edt, check_contrast=False)
+    prf.to_csv(prf_path, index=False)
+    fig.savefig(fig_path, format="png")
+     
+#%% Execute -------------------------------------------------------------------
 
-    # # Display
-    # import napari
-    # vwr = napari.Viewer()
-    # vwr.add_image(img)
-    # vwr.add_image(edt, visible=0)
-    # vwr.add_image(out, blending="additive")
+if __name__ == "__main__":
+    
+    msk_paths = list(data_path.glob("**/*msk.tif"))
+    for msk_path in msk_paths:
+        analyse(msk_path)
