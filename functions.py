@@ -8,7 +8,6 @@ from readlif.reader import LifFile
 # skimage
 from skimage.transform import downscale_local_mean
 
-
 #%% Functions -----------------------------------------------------------------
 
 def read_lif(path, df):    

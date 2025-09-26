@@ -328,6 +328,9 @@ class Correct:
         Path(path.replace("img", "msk")).unlink()
         Path(path.replace("img", "pnt")).unlink()
         Path(path.replace("img", "out")).unlink()
+        Path(path.replace("img", "edt")).unlink()
+        Path(path.replace("img.tif", "prf.csv")).unlink()
+        Path(path.replace("img.tif", "fig.png")).unlink()
         
 #%% Function(s) Info ----------------------------------------------------------
     
